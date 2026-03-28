@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Rate Limiter Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f5f5f4;
+      --bg-tertiary: #f0efed;
+      --text-primary: #1a1a18;
+      --text-secondary: #6b6b68;
+      --text-tertiary: #a0a09d;
+      --border: rgba(0,0,0,0.12);
+      --border-md: rgba(0,0,0,0.2);
+      --success-bg: #eaf3de;
+      --success-text: #3b6d11;
+      --danger-bg: #fcebeb;
+      --danger-text: #a32d2d;
+      --warning-bg: #faeeda;
+      --warning-text: #854f0b;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #1e1e1c;
+        --bg-secondary: #2a2a28;
+        --bg-tertiary: #242422;
+        --text-primary: #f0efed;
+        --text-secondary: #a0a09d;
+        --text-tertiary: #6b6b68;
+        --border: rgba(255,255,255,0.1);
+        --border-md: rgba(255,255,255,0.2);
+        --success-bg: #173404;
+        --success-text: #97c459;
+        --danger-bg: #501313;
+        --danger-text: #f09595;
+        --warning-bg: #412402;
+        --warning-text: #fac775;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container { max-width: 860px; margin: 0 auto; }
+
+    h1 { font-size: 22px; font-weight: 500; }
+    h2 { font-size: 18px; font-weight: 500; }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .header-sub { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
+
+    .btn-group { display: flex; gap: 8px; }
+
+    .btn {
+      padding: 8px 16px;
+      border: 0.5px solid var(--border-md);
+      border-radius: var(--radius-md);
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: var(--bg-secondary); }
+    .btn-primary {
+      background: var(--text-primary);
+      color: var(--bg-primary);
+      border-color: var(--text-primary);
+    }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-danger { border-color: var(--danger-text); color: var(--danger-text); }
+    .btn-danger:hover { background: var(--danger-bg); }
+    .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 1.5rem;
+    }
+    @media (max-width: 600px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } }
+
+    .metric-card {
+      background: var(--bg-secondary);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      text-align: center;
+    }
+    .metric-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+    .metric-value { font-size: 24px; font-weight: 500; }
+
+    .card {
+      background: var(--bg-primary);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1rem 1.25rem;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 12px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 0.5px solid var(--border);
+      margin-bottom: 1.5rem;
+    }
+    .tab {
+      padding: 9px 16px;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      font-family: inherit;
+      background: none;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+    }
+    .tab.active { color: var(--text-primary); border-bottom-color: var(--text-primary); font-weight: 500; }
+    .tab:hover:not(.active) { color: var(--text-primary); }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    input[type="text"] {
+      padding: 8px 12px;
+      border: 0.5px solid var(--border-md);
+      border-radius: var(--radius-md);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      width: 100%;
+    }
+    input[type="text"]:focus { border-color: var(--text-primary); }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--text-primary);
+    }
+
+    .quick-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+    .result-banner {
+      display: none;
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      margin-top: 12px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .user-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .user-row:last-child { border-bottom: none; }
+
+    .avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    .username { min-width: 70px; font-size: 13px; font-weight: 500; }
+
+    .bar-bg {
+      flex: 1;
+      height: 7px;
+      background: var(--bg-secondary);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+
+    .count-label { font-size: 12px; color: var(--text-secondary); min-width: 36px; text-align: right; }
+
+    .badge {
+      font-size: 11px; padding: 3px 8px;
+      border-radius: var(--radius-md); font-weight: 500;
+    }
+    .badge-ok  { background: var(--success-bg); color: var(--success-text); }
+    .badge-warn{ background: var(--warning-bg); color: var(--warning-text); }
+    .badge-bad { background: var(--danger-bg);  color: var(--danger-text);  }
+
+    .log-entry {
+      display: flex; gap: 10px; align-items: center;
+      font-size: 12px; font-family: monospace;
+      padding: 5px 0;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .log-entry:last-child { border-bottom: none; }
+    .log-time  { color: var(--text-tertiary); min-width: 64px; }
+    .log-user  { color: var(--text-secondary); min-width: 72px; }
+    .log-ok    { color: var(--success-text); min-width: 64px; }
+    .log-block { color: var(--danger-text);  min-width: 64px; }
+    .log-meta  { color: var(--text-tertiary); font-size: 11px; }
+
+    .toast {
+      position: fixed; top: 20px; right: 20px;
+      padding: 10px 18px;
+      border-radius: var(--radius-md);
+      font-size: 13px; font-weight: 500;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s;
+      z-index: 999;
+    }
+    .toast-ok    { background: #1D9E75; color: #fff; }
+    .toast-block { background: #E24B4A; color: #fff; }
+
+    .config-row { margin-bottom: 1.25rem; }
+    .config-label {
+      display: flex; justify-content: space-between;
+      font-size: 13px; color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .config-label span { font-weight: 500; color: var(--text-primary); }
+
+    .divider { border: none; border-top: 0.5px solid var(--border); margin: 1rem 0; }
+
+    .send-row { display: flex; gap: 8px; }
+    .send-row input { flex: 1; }
+
+    .empty-msg { font-size: 13px; color: var(--text-secondary); }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div>
+      <h1>Rate Limiter Dashboard</h1>
+      <div class="header-sub">Sliding window &middot; <span id="cfg-label">5 req / 60s</span> per user</div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-danger" onclick="resetAll()">Reset all</button>
+      <button class="btn btn-primary" onclick="autoSimulate()">Auto simulate</button>
+    </div>
+  </div>
+
+  <div class="grid-4">
+    <div class="metric-card">
+      <div class="metric-label">Total requests</div>
+      <div class="metric-value" id="m-total">0</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Allowed</div>
+      <div class="metric-value" style="color:var(--success-text)" id="m-allowed">0</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Blocked</div>
+      <div class="metric-value" style="color:var(--danger-text)" id="m-blocked">0</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Active users</div>
+      <div class="metric-value" id="m-users">0</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('simulate')">Simulate</button>
+    <button class="tab" onclick="switchTab('users')">Users</button>
+    <button class="tab" onclick="switchTab('config')">Config</button>
+    <button class="tab" onclick="switchTab('log')">Log</button>
+  </div>
+
+  <!-- Simulate -->
+  <div id="panel-simulate" class="panel active">
+    <div class="card">
+      <div class="section-title">Send a request</div>
+      <div class="send-row">
+        <input type="text" id="uid-input" placeholder="Enter user ID (e.g. alice)" value="alice" />
+        <button class="btn btn-primary" onclick="sendRequest()">Send</button>
+      </div>
+      <div class="quick-btns">
+        <button class="btn" onclick="quickUser('alice')">alice</button>
+        <button class="btn" onclick="quickUser('bob')">bob</button>
+        <button class="btn" onclick="quickUser('charlie')">charlie</button>
+        <button class="btn" onclick="quickUser('dave')">dave</button>
+        <button class="btn" style="color:var(--text-secondary)" onclick="burstUser()">Burst &times;6 &rarr;</button>
+      </div>
+      <div class="result-banner" id="result-banner"></div>
+    </div>
+  </div>
+
+  <!-- Users -->
+  <div id="panel-users" class="panel">
+    <div class="card">
+      <div class="section-title">Per-user usage</div>
+      <div id="user-list"><p class="empty-msg">No requests yet.</p></div>
+    </div>
+  </div>
+
+  <!-- Config -->
+  <div id="panel-config" class="panel">
+    <div class="card">
+      <div class="section-title">Limiter settings</div>
+      <div class="config-row">
+        <div class="config-label">Max requests per window <span id="cfg-max-out">5</span></div>
+        <input type="range" min="1" max="20" value="5" step="1" id="cfg-max-range" oninput="updateConfigLabel()" />
+      </div>
+      <div class="config-row">
+        <div class="config-label">Window size (seconds) <span id="cfg-win-out">60</span></div>
+        <input type="range" min="5" max="300" value="60" step="5" id="cfg-win-range" oninput="updateConfigLabel()" />
+      </div>
+      <hr class="divider" />
+      <button class="btn btn-primary" onclick="applyConfig()">Apply &amp; reset</button>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div id="panel-log" class="panel">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="section-title" style="margin-bottom:0">Request log</div>
+        <button class="btn btn-sm" onclick="clearLog()">Clear</button>
+      </div>
+      <div id="log-list"><p class="empty-msg">No requests logged yet.</p></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  let MAX_REQ = 5;
+  let WIN_MS  = 60000;
+  const users = {};
+  let totalAllowed = 0, totalBlocked = 0;
+  const logs = [];
+
+  const COLORS = ['#1D9E75','#378ADD','#D85A30','#D4537E','#BA7517','#7F77DD'];
+  function avatarColor(uid) {
+    let h = 0;
+    for (let c of uid) h = (h * 31 + c.charCodeAt(0)) % COLORS.length;
+    return COLORS[h];
+  }
+
+  function getUser(uid) {
+    if (!users[uid]) users[uid] = { timestamps: [], allowed: 0, blocked: 0 };
+    return users[uid];
+  }
+
+  function evict(uid) {
+    const u = getUser(uid);
+    const cutoff = Date.now() - WIN_MS;
+    u.timestamps = u.timestamps.filter(t => t >= cutoff);
+  }
+
+  function checkRequest(uid) {
+    evict(uid);
+    const u = users[uid];
+    const now = Date.now();
+    if (u.timestamps.length < MAX_REQ) {
+      u.timestamps.push(now);
+      u.allowed++;
+      totalAllowed++;
+      const remaining = MAX_REQ - u.timestamps.length;
+      pushLog(uid, true, remaining, 0);
+      return { allowed: true, remaining };
+    } else {
+      const retryMs = Math.max(1, u.timestamps[0] + WIN_MS - now);
+      u.blocked++;
+      totalBlocked++;
+      pushLog(uid, false, 0, retryMs);
+      return { allowed: false, retryMs };
+    }
+  }
+
+  function pushLog(uid, ok, remaining, retryMs) {
+    const t = new Date().toLocaleTimeString('en-US', { hour12: false });
+    logs.unshift({ t, uid, ok, remaining, retryMs });
+    if (logs.length > 60) logs.pop();
+  }
+
+  function sendRequest() {
+    const uid = document.getElementById('uid-input').value.trim() || 'anon';
+    fireRequest(uid, true);
+  }
+
+  function quickUser(uid) {
+    document.getElementById('uid-input').value = uid;
+    fireRequest(uid, true);
+  }
+
+  function burstUser() {
+    const uid = document.getElementById('uid-input').value.trim() || 'alice';
+    for (let i = 0; i < 6; i++) {
+      setTimeout(() => fireRequest(uid, i === 5), i * 100);
+    }
+  }
+
+  function fireRequest(uid, showBanner) {
+    const res = checkRequest(uid);
+    if (showBanner) {
+      const el = document.getElementById('result-banner');
+      el.style.display = 'block';
+      if (res.allowed) {
+        el.style.background = 'var(--success-bg)';
+        el.style.color = 'var(--success-text)';
+        el.textContent = '✓ Allowed — ' + uid + ' · ' + res.remaining + ' slot' + (res.remaining !== 1 ? 's' : '') + ' remaining';
+      } else {
+        el.style.background = 'var(--danger-bg)';
+        el.style.color = 'var(--danger-text)';
+        el.textContent = '✗ Blocked — ' + uid + ' · retry after ' + (res.retryMs / 1000).toFixed(1) + 's';
+      }
+      showToast(res.allowed, uid);
+    }
+    updateMetrics();
+    renderUsers();
+    renderLog();
+  }
+
+  function showToast(ok, uid) {
+    const t = document.getElementById('toast');
+    t.className = 'toast ' + (ok ? 'toast-ok' : 'toast-block');
+    t.textContent = (ok ? '✓ ' : '✗ ') + uid + (ok ? ' allowed' : ' blocked');
+    t.style.opacity = '1';
+    setTimeout(() => t.style.opacity = '0', 1800);
+  }
+
+  function updateMetrics() {
+    document.getElementById('m-total').textContent   = totalAllowed + totalBlocked;
+    document.getElementById('m-allowed').textContent = totalAllowed;
+    document.getElementById('m-blocked').textContent = totalBlocked;
+    document.getElementById('m-users').textContent   = Object.keys(users).length;
+  }
+
+  function renderUsers() {
+    const el = document.getElementById('user-list');
+    const uids = Object.keys(users);
+    if (!uids.length) { el.innerHTML = '<p class="empty-msg">No requests yet.</p>'; return; }
+    el.innerHTML = uids.map(uid => {
+      evict(uid);
+      const u = users[uid];
+      const count = u.timestamps.length;
+      const pct   = Math.round((count / MAX_REQ) * 100);
+      const color = avatarColor(uid);
+      const cls   = count >= MAX_REQ ? 'badge-bad' : count >= MAX_REQ * 0.6 ? 'badge-warn' : 'badge-ok';
+      const label = count >= MAX_REQ ? 'blocked' : count >= MAX_REQ * 0.6 ? 'near limit' : 'ok';
+      return `<div class="user-row">
+        <div class="avatar" style="background:${color}22;color:${color}">${uid.slice(0,2).toUpperCase()}</div>
+        <div class="username">${uid}</div>
+        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+        <div class="count-label">${count}/${MAX_REQ}</div>
+        <span class="badge ${cls}">${label}</span>
+        <button class="btn btn-danger btn-sm" onclick="resetUser('${uid}')">reset</button>
+      </div>`;
+    }).join('');
+  }
+
+  function renderLog() {
+    const el = document.getElementById('log-list');
+    if (!logs.length) { el.innerHTML = '<p class="empty-msg">No requests logged yet.</p>'; return; }
+    el.innerHTML = logs.slice(0, 25).map(l => `
+      <div class="log-entry">
+        <span class="log-time">${l.t}</span>
+        <span class="log-user">${l.uid}</span>
+        <span class="${l.ok ? 'log-ok' : 'log-block'}">${l.ok ? '✓ allowed' : '✗ blocked'}</span>
+        <span class="log-meta">${l.ok ? 'remaining: ' + l.remaining : 'retry: ' + (l.retryMs/1000).toFixed(1) + 's'}</span>
+      </div>`).join('');
+  }
+
+  function resetUser(uid) {
+    delete users[uid];
+    updateMetrics(); renderUsers();
+  }
+
+  function resetAll() {
+    Object.keys(users).forEach(k => delete users[k]);
+    totalAllowed = 0; totalBlocked = 0; logs.length = 0;
+    document.getElementById('result-banner').style.display = 'none';
+    updateMetrics(); renderUsers(); renderLog();
+  }
+
+  function clearLog() { logs.length = 0; renderLog(); }
+
+  function updateConfigLabel() {
+    document.getElementById('cfg-max-out').textContent = document.getElementById('cfg-max-range').value;
+    document.getElementById('cfg-win-out').textContent = document.getElementById('cfg-win-range').value;
+  }
+
+  function applyConfig() {
+    MAX_REQ = parseInt(document.getElementById('cfg-max-range').value);
+    WIN_MS  = parseInt(document.getElementById('cfg-win-range').value) * 1000;
+    document.getElementById('cfg-label').textContent =
+      MAX_REQ + ' req / ' + (WIN_MS / 1000) + 's';
+    resetAll();
+    showToast(true, 'config updated');
+  }
+
+  function autoSimulate() {
+    const names = ['alice','bob','charlie','dave','eve'];
+    let i = 0;
+    const iv = setInterval(() => {
+      const uid = names[Math.floor(Math.random() * names.length)];
+      fireRequest(uid, true);
+      if (++i >= 20) clearInterval(iv);
+    }, 220);
+  }
+
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    const tabs = ['simulate','users','config','log'];
+    document.querySelectorAll('.tab')[tabs.indexOf(name)].classList.add('active');
+    document.getElementById('panel-' + name).classList.add('active');
+  }
+</script>
+</body>
+</html>
